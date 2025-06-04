@@ -1,21 +1,10 @@
 pipeline {
     agent any
 
-    tools {
-    jdk 'jdk17'
-}
-
-
-    environment {
-        JAVA_HOME = tool name: 'jdk17', type: 'jdk'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-    }
-
     stages {
         stage('Hello') {
             steps {
                 echo 'Hello World'
-                sh 'java -version'
             }
         }
 
@@ -29,8 +18,13 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv(installationName: 'Sonar-server', credentialsId: 'mysonar-token') {
-                    sh 'java -version'        // Confirm Java version used
-                    sh 'sonar-scanner'        // Run scanner
+                    sh '''
+                        docker run --rm \
+                            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+                            -e SONAR_LOGIN="${SONAR_AUTH_TOKEN}" \
+                            -v "${WORKSPACE}:/usr/src" \
+                            sonarsource/sonar-scanner-cli:latest
+                    '''
                 }
             }
         }
@@ -38,14 +32,14 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building...'
-                // Example: sh 'npm install'
+                // Example: sh 'npm install' or 'make build'
             }
         }
 
         stage('Test') {
             steps {
                 echo 'Testing...'
-                // Example: sh 'npm test'
+                // Example: sh 'npm test' or 'make test'
             }
         }
     }
