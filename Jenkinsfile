@@ -7,5 +7,34 @@ pipeline {
                 echo 'Hello World'
             }
         }
+
+        stage('Checkout Code') {
+            steps {
+                echo 'Cloning Git repository'
+                checkout scm
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv(credentialsId: 'mysonar-token') {
+                    sh 'sonar-scanner'
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Building...'
+                // Example: sh 'npm install' or 'make build'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Testing...'
+                // Example: sh 'npm test' or 'make test'
+            }
+        }
     }
 }
