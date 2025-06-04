@@ -2,11 +2,12 @@ pipeline {
     agent any
 
     tools {
-        jdk 'Java-17'  // This must match exactly what you named it in Jenkins UI
-    }
+    jdk 'jdk17'
+}
+
 
     environment {
-        JAVA_HOME = tool name: 'Java-17', type: 'jdk'
+        JAVA_HOME = tool name: 'jdk17', type: 'jdk'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
