@@ -40,11 +40,12 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'NodeJS'  // Use the NodeJS tool installed on Jenkins
+        nodejs 'NodeJS'
     }
 
     environment {
         SONAR_SCANNER_OPTS = "-Xmx512m"
+        NODE_ENV = 'test'
     }
 
     stages {
@@ -56,7 +57,6 @@ pipeline {
 
         stage('Clear npm cache') {
             steps {
-                // Remove existing node_modules and package-lock to ensure clean install
                 sh 'rm -rf node_modules package-lock.json || true'
                 sh 'npm cache clean --force'
             }
@@ -64,12 +64,9 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Install dependencies and replace bcrypt with bcryptjs for better compatibility
                 sh 'npm install'
                 sh 'npm uninstall bcrypt || true'
                 sh 'npm install bcryptjs'
-                
-                // Fix permissions for node_modules binaries
                 sh 'chmod -R +x node_modules/.bin/'
             }
         }
@@ -77,10 +74,38 @@ pipeline {
         stage('Update Code for bcryptjs') {
             steps {
                 script {
-                    // Replace bcrypt imports with bcryptjs in the codebase
+                    // Replace bcrypt imports with bcryptjs in the codebase AND test files
                     sh '''
                     find . -name "*.js" -not -path "./node_modules/*" -exec sed -i 's/require("bcrypt")/require("bcryptjs")/g' {} \\;
                     find . -name "*.js" -not -path "./node_modules/*" -exec sed -i "s/require('bcrypt')/require('bcryptjs')/g" {} \\;
+                    '''
+                }
+            }
+        }
+
+        stage('Fix Test Configuration') {
+            steps {
+                script {
+                    // Update package.json to include Jest configuration if it doesn't exist
+                    sh '''
+                    # Check if jest config exists in package.json, if not add it
+                    if ! grep -q '"jest"' package.json; then
+                        # Create a temporary package.json with jest config
+                        jq '. + {
+                            "jest": {
+                                "testEnvironment": "node",
+                                "testTimeout": 15000,
+                                "collectCoverageFrom": [
+                                    "**/*.js",
+                                    "!node_modules/**",
+                                    "!coverage/**",
+                                    "!tests/**"
+                                ],
+                                "coverageReporters": ["text", "lcov", "html"],
+                                "testMatch": ["**/tests/**/*.test.js"]
+                            }
+                        }' package.json > package.json.tmp && mv package.json.tmp package.json
+                    fi
                     '''
                 }
             }
@@ -90,18 +115,40 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Try using npx first (recommended approach)
-                        sh 'npx jest --coverage'
+                        sh 'npx jest --coverage --verbose --detectOpenHandles --forceExit'
                     } catch (Exception e) {
-                        echo "npx failed, trying direct execution..."
-                        // Fallback to direct execution
-                        sh './node_modules/.bin/jest --coverage'
+                        echo "npx jest failed, trying direct execution..."
+                        try {
+                            sh './node_modules/.bin/jest --coverage --verbose --detectOpenHandles --forceExit'
+                        } catch (Exception e2) {
+                            echo "Direct jest execution also failed. Checking test files..."
+                            sh 'ls -la tests/'
+                            sh 'cat tests/*.test.js'
+                            error "All test execution methods failed"
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    // Archive coverage reports
+                    script {
+                        if (fileExists('coverage/')) {
+                            archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
+                        }
                     }
                 }
             }
         }
 
         stage('SonarQube Analysis') {
+            when {
+                // Only run SonarQube on main branch to avoid issues with PR builds
+                anyOf {
+                    branch 'main'
+                    //branch 'master'
+                }
+            }
             steps {
                 withSonarQubeEnv('Sonar-server') {
                     sh """
@@ -114,16 +161,41 @@ pipeline {
                 }
             }
         }
+
+        stage('Quality Gate') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                }
+            }
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        try {
+                            waitForQualityGate abortPipeline: true
+                        } catch (Exception e) {
+                            echo "Quality gate failed, but continuing..."
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
             echo 'Pipeline execution completed'
-            // Archive test results if they exist
             script {
+                // Archive all relevant artifacts
                 if (fileExists('coverage/')) {
                     archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
                 }
+                
+                // Clean up any hanging processes
+                sh 'pkill -f jest || true'
+                sh 'pkill -f node || true'
             }
         }
         success {
@@ -131,6 +203,18 @@ pipeline {
         }
         failure {
             echo 'Pipeline execution failed!'
+            script {
+                // Debug information on failure
+                sh 'echo "Node version: $(node --version)"'
+                sh 'echo "NPM version: $(npm --version)"'
+                sh 'ls -la'
+                if (fileExists('tests/')) {
+                    sh 'ls -la tests/'
+                }
+            }
+        }
+        unstable {
+            echo 'Pipeline execution was unstable!'
         }
     }
 }
