@@ -56,13 +56,22 @@ pipeline {
 
         stage('Clear npm cache') {
             steps {
+                // Remove existing node_modules and package-lock to ensure clean install
+                sh 'rm -rf node_modules package-lock.json || true'
                 sh 'npm cache clean --force'
             }
         }
 
         stage('Install Dependencies') {
             steps {
+                // Clean install to avoid native module conflicts
+                sh 'rm -rf node_modules package-lock.json'
+                sh 'npm cache clean --force'
                 sh 'npm install'
+                
+                // Rebuild native modules for current architecture
+                sh 'npm rebuild bcrypt --build-from-source'
+                
                 // Fix permissions for node_modules binaries
                 sh 'chmod -R +x node_modules/.bin/'
             }
