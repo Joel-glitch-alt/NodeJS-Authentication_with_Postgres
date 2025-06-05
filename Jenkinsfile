@@ -53,22 +53,33 @@ pipeline {
                 checkout scm
             }
         }
-        //
+
         stage('Clear npm cache') {
-    steps {
-        sh 'npm cache clean --force'
-    }
-}
+            steps {
+                sh 'npm cache clean --force'
+            }
+        }
 
         stage('Install Dependencies') {
             steps {
                 sh 'npm install'
+                // Fix permissions for node_modules binaries
+                sh 'chmod -R +x node_modules/.bin/'
             }
         }
 
         stage('Run Tests with Coverage') {
             steps {
-                sh 'npm run test:coverage'
+                script {
+                    try {
+                        // Try using npx first (recommended approach)
+                        sh 'npx jest --coverage'
+                    } catch (Exception e) {
+                        echo "npx failed, trying direct execution..."
+                        // Fallback to direct execution
+                        sh './node_modules/.bin/jest --coverage'
+                    }
+                }
             }
         }
 
@@ -77,13 +88,31 @@ pipeline {
                 withSonarQubeEnv('Sonar-server') {
                     sh """
                     docker run --rm \\
-                        -e SONAR_HOST_URL=${SONAR_HOST_URL} \\
-                        -e SONAR_LOGIN=${SONAR_AUTH_TOKEN} \\
-                        -v ${WORKSPACE}:/usr/src \\
+                        -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
+                        -e SONAR_LOGIN=\${SONAR_AUTH_TOKEN} \\
+                        -v \${WORKSPACE}:/usr/src \\
                         sonarsource/sonar-scanner-cli:latest
                     """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline execution completed'
+            // Archive test results if they exist
+            script {
+                if (fileExists('coverage/')) {
+                    archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
+                }
+            }
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline execution failed!'
         }
     }
 }
