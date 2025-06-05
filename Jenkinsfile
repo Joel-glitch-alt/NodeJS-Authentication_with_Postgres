@@ -17,7 +17,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv(installationName: 'Sonar-server', credentialsId: 'mysonar-token') {
+                withSonarQubeEnv(installationName: 'Sonar-server', credentialsId: 'mysonar-second-token') {
                     sh '''
                         docker run --rm \
                             -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
