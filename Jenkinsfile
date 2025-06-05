@@ -379,12 +379,6 @@ pipeline {
         }
 
         stage('Quality Gate') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'master'
-                }
-            }
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
                     script {
