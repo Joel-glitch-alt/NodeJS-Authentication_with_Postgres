@@ -83,35 +83,35 @@ pipeline {
             }
         }
 
-        stage('Fix Test Configuration') {
-            steps {
-                script {
-                    // Update package.json to include Jest configuration if it doesn't exist
-                    sh '''
-                    # Check if jest config exists in package.json, if not add it
-                    if ! grep -q '"jest"' package.json; then
-                        # Create a temporary package.json with jest config
-                        jq '. + {
-                            "jest": {
-                                "testEnvironment": "node",
-                                "testTimeout": 15000,
-                                "collectCoverageFrom": [
-                                    "**/*.js",
-                                    "!node_modules/**",
-                                    "!coverage/**",
-                                    "!tests/**"
-                                ],
-                                "coverageReporters": ["text", "lcov", "html"],
-                                "testMatch": ["**/tests/**/*.test.js"]
-                            }
-                        }' package.json > package.json.tmp && mv package.json.tmp package.json
-                    fi
-                    '''
-                }
-            }
-        }
+        // stage('Fix Test Configuration') {
+        //     steps {
+        //         script {
+        //             // Update package.json to include Jest configuration if it doesn't exist
+        //             sh '''
+        //             # Check if jest config exists in package.json, if not add it
+        //             if ! grep -q '"jest"' package.json; then
+        //                 # Create a temporary package.json with jest config
+        //                 jq '. + {
+        //                     "jest": {
+        //                         "testEnvironment": "node",
+        //                         "testTimeout": 15000,
+        //                         "collectCoverageFrom": [
+        //                             "**/*.js",
+        //                             "!node_modules/**",
+        //                             "!coverage/**",
+        //                             "!tests/**"
+        //                         ],
+        //                         "coverageReporters": ["text", "lcov", "html"],
+        //                         "testMatch": ["**/tests/**/*.test.js"]
+        //                     }
+        //                 }' package.json > package.json.tmp && mv package.json.tmp package.json
+        //             fi
+        //             '''
+        //         }
+        //     }
+        // }
 
-           stage('Fix Test Configuration') {
+          stage('Fix Test Configuration') {
     steps {
         script {
             sh '''
@@ -138,6 +138,39 @@ pipeline {
         }
     }
 }
+
+
+        stage('Run Tests with Coverage') {
+            steps {
+                script {
+                    try {
+                        sh 'npx jest --coverage --verbose --detectOpenHandles --forceExit'
+                        sh 'npx jest --config=jest.config.js --coverage --verbose --detectOpenHandles --forceExit'
+
+                    } catch (Exception e) {
+                        echo "npx jest failed, trying direct execution..."
+                        try {
+                            sh './node_modules/.bin/jest --coverage --verbose --detectOpenHandles --forceExit'
+                        } catch (Exception e2) {
+                            echo "Direct jest execution also failed. Checking test files..."
+                            sh 'ls -la tests/'
+                            sh 'cat tests/*.test.js'
+                            error "All test execution methods failed"
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    // Archive coverage reports
+                    script {
+                        if (fileExists('coverage/')) {
+                            archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
+                        }
+                    }
+                }
+            }
+        }
 
         stage('SonarQube Analysis') {
             when {
