@@ -115,7 +115,9 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'npx jest --coverage --verbose --detectOpenHandles --forceExit'
+                       // sh 'npx jest --coverage --verbose --detectOpenHandles --forceExit'
+                        sh 'npx jest --config=jest.config.js --coverage --verbose --detectOpenHandles --forceExit'
+
                     } catch (Exception e) {
                         echo "npx jest failed, trying direct execution..."
                         try {
