@@ -1,14 +1,16 @@
-const passport = require("passport");
-const bcrypt = require("bcryptjs"); // Using bcryptjs
-const initialize = require("../passportConfig");
-
-// Mock the entire dbConfig module and its pool.query method
 const mockQuery = jest.fn();
+
 jest.mock("../dbConfig", () => ({
   pool: {
     query: mockQuery,
   },
 }));
+
+const passport = require("passport");
+const bcrypt = require("bcryptjs"); // Using bcryptjs
+const initialize = require("../passportConfig");
+
+// Mock the entire dbConfig module and its pool.query metho
 
 // Initialize passport local strategy after mocks
 initialize(passport);
