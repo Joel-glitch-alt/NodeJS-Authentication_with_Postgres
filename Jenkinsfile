@@ -64,16 +64,25 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Clean install to avoid native module conflicts
-                sh 'rm -rf node_modules package-lock.json'
-                sh 'npm cache clean --force'
+                // Install dependencies and replace bcrypt with bcryptjs for better compatibility
                 sh 'npm install'
-                
-                // Rebuild native modules for current architecture
-                sh 'npm rebuild bcrypt --build-from-source'
+                sh 'npm uninstall bcrypt || true'
+                sh 'npm install bcryptjs'
                 
                 // Fix permissions for node_modules binaries
                 sh 'chmod -R +x node_modules/.bin/'
+            }
+        }
+
+        stage('Update Code for bcryptjs') {
+            steps {
+                script {
+                    // Replace bcrypt imports with bcryptjs in the codebase
+                    sh '''
+                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i 's/require("bcrypt")/require("bcryptjs")/g' {} \\;
+                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i "s/require('bcrypt')/require('bcryptjs')/g" {} \\;
+                    '''
+                }
             }
         }
 
