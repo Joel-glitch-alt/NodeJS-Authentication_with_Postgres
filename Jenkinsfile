@@ -404,19 +404,42 @@ pipeline {
             }
         }
 
+        // stage('Quality Gate') {
+        //     steps {
+        //         timeout(time: 5, unit: 'MINUTES') {
+        //             script {
+        //                 try {
+        //                     waitForQualityGate abortPipeline: false
+        //                 } catch (Exception e) {
+        //                     echo "Quality gate failed or timed out: ${e.getMessage()}"
+        //                     echo "Continuing pipeline execution..."
+        //                     currentBuild.result = 'UNSTABLE'
+        //                 }
+        //             }
+        //         }
+        //     }
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
-                        try {
-                            waitForQualityGate abortPipeline: false
-                        } catch (Exception e) {
-                            echo "Quality gate failed or timed out: ${e.getMessage()}"
-                            echo "Continuing pipeline execution..."
-                            currentBuild.result = 'UNSTABLE'
-                        }
+            timeout(time: 5, unit: 'MINUTES') {
+                script {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    try {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "Quality Gate status: ${qg.status}"
+                        echo "Quality Gate failed, but continuing pipeline..."
+                    } else {
+                        echo "Quality Gate passed!"
+                    }
+                    } catch (Exception e) {
+                    echo "Quality gate failed or timed out: ${e.getMessage()}"
+                    echo "Continuing pipeline execution..."
+                    // Set build as unstable but continue
+                    currentBuild.result = 'UNSTABLE'
                     }
                 }
+                }
+            }
             }
         }
     }
