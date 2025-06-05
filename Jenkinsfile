@@ -173,13 +173,6 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            when {
-                // Only run SonarQube on main branch to avoid issues with PR builds
-                anyOf {
-                    branch 'main'
-                    //branch 'master'
-                }
-            }
             steps {
                 withSonarQubeEnv('Sonar-server') {
                     sh """
