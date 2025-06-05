@@ -172,19 +172,35 @@ pipeline {
             }
         }
 
+        // stage('SonarQube Analysis') {
+        //     steps {
+        //         withSonarQubeEnv('Sonar-server') {
+        //             sh """
+        //             docker run --rm \\
+        //                 -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
+        //                 -e SONAR_LOGIN=\${SONAR_AUTH_TOKEN} \\
+        //                 -v \${WORKSPACE}:/usr/src \\
+        //                 sonarsource/sonar-scanner-cli:latest
+        //             """
+        //         }
+        //     }
+        // }
         stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('Sonar-server') {
-                    sh """
-                    docker run --rm \\
-                        -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
-                        -e SONAR_LOGIN=\${SONAR_AUTH_TOKEN} \\
-                        -v \${WORKSPACE}:/usr/src \\
-                        sonarsource/sonar-scanner-cli:latest
-                    """
-                }
+                   steps {
+                   withSonarQubeEnv('Sonar-server') {
+                   withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_LOGIN')]) {
+                   sh """
+                   docker run --rm \\
+                    -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
+                    -e SONAR_LOGIN=\${SONAR_LOGIN} \\
+                    -v \${WORKSPACE}:/usr/src \\
+                    sonarsource/sonar-scanner-cli:latest
+                """
             }
         }
+    }
+}
+
 
         stage('Quality Gate') {
             when {
