@@ -1,5 +1,3 @@
-/
-
 
 // This Pipeline does not work becos of version incompatibility issues with the SonarQube plugin.
 // pipeline {
