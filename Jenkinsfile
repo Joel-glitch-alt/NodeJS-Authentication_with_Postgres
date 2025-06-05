@@ -42,7 +42,7 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'NodeJS'  // Ensure Jenkins has NodeJS tool named 'NodeJS'
+        nodejs 'NodeJS'  // Use the NodeJS tool installed on Jenkins
     }
 
     environment {
@@ -52,7 +52,6 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                echo 'Cloning Git repository'
                 checkout scm
             }
         }
@@ -65,7 +64,6 @@ pipeline {
 
         stage('Run Tests with Coverage') {
             steps {
-                echo 'Running Jest Tests with Coverage'
                 sh 'npm run test:coverage'
             }
         }
@@ -73,9 +71,16 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('Sonar-server') {
-                    sh 'npx sonar-scanner'
+                    sh """
+                    docker run --rm \\
+                        -e SONAR_HOST_URL=${SONAR_HOST_URL} \\
+                        -e SONAR_LOGIN=${SONAR_AUTH_TOKEN} \\
+                        -v ${WORKSPACE}:/usr/src \\
+                        sonarsource/sonar-scanner-cli:latest
+                    """
                 }
             }
         }
     }
 }
+
