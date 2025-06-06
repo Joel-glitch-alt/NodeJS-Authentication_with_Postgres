@@ -45,7 +45,7 @@ pipeline {
     environment {
         SONAR_SCANNER_OPTS = "-Xmx512m"
         NODE_ENV = 'test'
-        DOCKER_IMAGE = 'addition1905/nodejs-authentication-postgresql:latest'
+        DOCKER_IMAGE_NAME = 'addition1905/nodejs-authentication-postgresql'
         DOCKER_TAG = "${BUILD_NUMBER}"
     }
 
@@ -151,11 +151,11 @@ pipeline {
                     checkout scm
                     
                     try {
-                        // Build the Docker image with multiple tags
-                        def img = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                        // Build the Docker image with build number tag
+                        def img = docker.build("${DOCKER_IMAGE_NAME}:${DOCKER_TAG}")
                         
                         // Also tag as latest
-                        sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
+                        sh "docker tag ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} ${DOCKER_IMAGE_NAME}:latest"
                         
                         // Push to Docker Hub
                         docker.withRegistry('https://index.docker.io/v1/', 'addition1905') {
@@ -164,8 +164,8 @@ pipeline {
                         }
                         
                         echo "✅ Docker image built and pushed successfully!"
-                        echo "📦 Image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                        echo "📦 Image: ${DOCKER_IMAGE}:latest"
+                        echo "📦 Image: ${DOCKER_IMAGE_NAME}:${DOCKER_TAG}"
+                        echo "📦 Image: ${DOCKER_IMAGE_NAME}:latest"
                         
                     } catch (Exception e) {
                         echo "❌ Docker build/push failed: ${e.getMessage()}"
@@ -187,7 +187,7 @@ pipeline {
                     echo "✅ Docker image built and pushed"
                     echo ""
                     echo "🚀 Your Node.js application is ready for deployment!"
-                    echo "🐳 Pull and run with: docker run -p 3000:3000 ${DOCKER_IMAGE}:latest"
+                    echo "🐳 Pull and run with: docker run -p 3000:3000 ${DOCKER_IMAGE_NAME}:latest"
                 }
             }
         }
@@ -208,14 +208,14 @@ pipeline {
                 
                 // Clean up Docker images to save space (optional)
                 sh """
-                    docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true
+                    docker rmi ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} || true
                     docker system prune -f || true
                 """
             }
         }
         success {
             echo '🎉 Pipeline executed successfully!'
-            echo "🐳 Docker image ${DOCKER_IMAGE}:${DOCKER_TAG} is now available on Docker Hub"
+            echo "🐳 Docker image ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} is now available on Docker Hub"
         }
         failure {
             echo '❌ Pipeline execution failed!'

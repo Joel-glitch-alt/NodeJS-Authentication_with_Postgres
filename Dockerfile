@@ -17,9 +17,6 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy the rest of the application code
 COPY . .
 
-# Remove development dependencies and unnecessary files
-RUN rm -rf tests/ coverage/ jest.config.js sonar-project.properties .git* || true
-
 # Change ownership of the app directory to nodejs user
 RUN chown -R nodejs:nodejs /usr/src/app
 
@@ -29,14 +26,14 @@ USER nodejs
 # Expose the port your app runs on
 EXPOSE 3000
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (res) => { \
-        if (res.statusCode === 200) process.exit(0); else process.exit(1); \
-    }).on('error', () => process.exit(1))" || exit 1
-
 # Set environment to production
 ENV NODE_ENV=production
 
+# Add health check (only if you have a /health endpoint)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/health', (res) => { \
+        process.exit(res.statusCode === 200 ? 0 : 1); \
+    }).on('error', () => process.exit(1))"
+
 # Define the command to run your application
-CMD ["npm", "start","dev"]
+CMD ["npm", "start"]
