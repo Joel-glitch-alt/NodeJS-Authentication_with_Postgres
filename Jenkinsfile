@@ -214,7 +214,7 @@ pipeline {
         }
         unstable {
             echo '⚠️ Pipeline execution was unstable!'
-            echo 'Tests passed but some quality checks may have issues.'
+            echo 'Tests passed but some quality checks may have issues..'
         }
     }
 }
