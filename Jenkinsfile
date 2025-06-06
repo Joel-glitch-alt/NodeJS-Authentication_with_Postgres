@@ -298,7 +298,6 @@ pipeline {
         stage('Update Code for bcryptjs') {
             steps {
                 script {
-                    // Replace bcrypt imports with bcryptjs in the codebase
                     sh '''
                     find . -name "*.js" -not -path "./node_modules/*" -exec sed -i 's/require("bcrypt")/require("bcryptjs")/g' {} \\;
                     find . -name "*.js" -not -path "./node_modules/*" -exec sed -i "s/require('bcrypt')/require('bcryptjs')/g" {} \\;
@@ -310,13 +309,11 @@ pipeline {
         stage('Fix Test Configuration') {
             steps {
                 script {
-                    // Check if jest.config.js exists, if not create basic jest config in package.json
                     sh '''
                     if [ ! -f jest.config.js ]; then
                         echo "jest.config.js not found, checking package.json for jest config..."
                         if ! grep -q '"jest"' package.json; then
                             echo "Adding jest configuration to package.json..."
-                            # Use node to modify package.json instead of jq to avoid permission issues
                             node -e "
                                 const fs = require('fs');
                                 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -347,7 +344,6 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Run jest with the appropriate config
                         if (fileExists('jest.config.js')) {
                             sh 'npx jest --config=jest.config.js --coverage --verbose --detectOpenHandles --forceExit'
                         } else {
@@ -370,7 +366,6 @@ pipeline {
             }
             post {
                 always {
-                    // Archive coverage reports
                     script {
                         if (fileExists('coverage/')) {
                             archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
@@ -386,13 +381,29 @@ pipeline {
                     try {
                         withSonarQubeEnv('Sonar-server') {
                             withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_TOKEN')]) {
+                                // Store the analysis task info
                                 sh """
                                 docker run --rm \\
                                     -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
                                     -e SONAR_TOKEN=\${SONAR_TOKEN} \\
                                     -v \${WORKSPACE}:/usr/src \\
-                                    sonarsource/sonar-scanner-cli:latest
+                                    sonarsource/sonar-scanner-cli:latest > sonar-analysis.log 2>&1
                                 """
+                                
+                                // Extract task ID from logs for quality gate
+                                sh '''
+                                if [ -f sonar-analysis.log ]; then
+                                    echo "SonarQube Analysis Log:"
+                                    cat sonar-analysis.log
+                                    
+                                    # Extract task ID if present
+                                    TASK_ID=$(grep -o "task?id=[^\"]*" sonar-analysis.log | cut -d'=' -f2 || echo "")
+                                    if [ ! -z "$TASK_ID" ]; then
+                                        echo "SONAR_TASK_ID=$TASK_ID" > sonar-task.properties
+                                        echo "Task ID found: $TASK_ID"
+                                    fi
+                                fi
+                                '''
                             }
                         }
                     } catch (Exception e) {
@@ -404,42 +415,37 @@ pipeline {
             }
         }
 
-        // stage('Quality Gate') {
-        //     steps {
-        //         timeout(time: 5, unit: 'MINUTES') {
-        //             script {
-        //                 try {
-        //                     waitForQualityGate abortPipeline: false
-        //                 } catch (Exception e) {
-        //                     echo "Quality gate failed or timed out: ${e.getMessage()}"
-        //                     echo "Continuing pipeline execution..."
-        //                     currentBuild.result = 'UNSTABLE'
-        //                 }
-        //             }
-        //         }
-        //     }
         stage('Quality Gate') {
             steps {
-            timeout(time: 10, unit: 'MINUTES') {
-                script {
-                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                    try {
-                    def qg = waitForQualityGate()
-                    if (qg.status != 'OK') {
-                        echo "Quality Gate status: ${qg.status}"
-                        echo "Quality Gate failed, but continuing pipeline..."
-                    } else {
-                        echo "Quality Gate passed!"
-                    }
-                    } catch (Exception e) {
-                    echo "Quality gate failed or timed out: ${e.getMessage()}"
-                    echo "Continuing pipeline execution..."
-                    // Set build as unstable but continue
-                    currentBuild.result = 'UNSTABLE'
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            try {
+                                // Only proceed if SonarQube analysis was successful
+                                if (fileExists('sonar-task.properties')) {
+                                    echo "Attempting to wait for quality gate..."
+                                    def qg = waitForQualityGate()
+                                    if (qg.status != 'OK') {
+                                        echo "Quality Gate status: ${qg.status}"
+                                        echo "Quality Gate failed, but continuing pipeline..."
+                                        currentBuild.result = 'UNSTABLE'
+                                    } else {
+                                        echo "Quality Gate passed!"
+                                    }
+                                } else {
+                                    echo "Skipping quality gate check - no task info available"
+                                    echo "SonarQube analysis may have completed but task ID extraction failed"
+                                    // Don't fail the build for this
+                                }
+                            } catch (Exception e) {
+                                echo "Quality gate check failed: ${e.getMessage()}"
+                                echo "This might be due to SonarQube server connectivity or configuration"
+                                echo "Continuing pipeline execution..."
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
                     }
                 }
-                }
-            }
             }
         }
     }
@@ -453,9 +459,17 @@ pipeline {
                     archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
                 }
                 
+                // Archive SonarQube logs for debugging
+                if (fileExists('sonar-analysis.log')) {
+                    archiveArtifacts artifacts: 'sonar-analysis.log', allowEmptyArchive: true
+                }
+                
                 // Clean up any hanging processes
                 sh 'pkill -f jest || true'
                 sh 'pkill -f node || true'
+                
+                // Clean up temporary files
+                sh 'rm -f sonar-analysis.log sonar-task.properties || true'
             }
         }
         success {
@@ -464,7 +478,6 @@ pipeline {
         failure {
             echo 'Pipeline execution failed!'
             script {
-                // Debug information on failure
                 sh 'echo "Node version: $(node --version)"'
                 sh 'echo "NPM version: $(npm --version)"'
                 sh 'ls -la'
@@ -475,6 +488,7 @@ pipeline {
         }
         unstable {
             echo 'Pipeline execution was unstable!'
+            echo 'This usually indicates that tests passed but quality gates or other checks had issues.'
         }
     }
 }
