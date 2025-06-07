@@ -42,13 +42,13 @@ pipeline {
         nodejs 'NodeJS'
     }
 
-       environment {
-    SONAR_SCANNER_OPTS = "-Xmx1024m"
-    NODE_ENV = 'test'
-    DOCKER_IMAGE_NAME = 'addition1905/nodejs-authentication-postgresql'
-    DOCKER_TAG = "${BUILD_NUMBER}"
-    SONAR_TIMEOUT = '10' // minutes
-   }
+    environment {
+        SONAR_SCANNER_OPTS = "-Xmx1024m"
+        NODE_ENV = 'test'
+        DOCKER_IMAGE_NAME = 'addition1905/nodejs-authentication-postgresql'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        SONAR_TIMEOUT = '10' // minutes
+    }
 
     stages {
         stage('Checkout Code') {
@@ -77,8 +77,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i 's/require("bcrypt")/require("bcryptjs")/g' {} \\;
-                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i "s/require('bcrypt')/require('bcryptjs')/g" {} \\;
+                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i 's/require("bcrypt")/require("bcryptjs")/g' {} \;
+                    find . -name "*.js" -not -path "./node_modules/*" -exec sed -i "s/require('bcrypt')/require('bcryptjs')/g" {} \;
                     '''
                 }
             }
@@ -120,54 +120,54 @@ pipeline {
             }
         }
 
-      stage('SonarQube Analysis') {
-    steps {
-        script {
-            try {
-                timeout(time: 10, unit: 'MINUTES') {
-                    withSonarQubeEnv('Sonar-server') {
-                        withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_TOKEN')]) {
-                            sh """
-                            docker run --rm \\
-                                -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
-                                -e SONAR_TOKEN=\${SONAR_TOKEN} \\
-                                -v \${WORKSPACE}:/usr/src \\
-                                sonarsource/sonar-scanner-cli:latest
-                            """
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    try {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            withSonarQubeEnv('Sonar-server') {
+                                withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_TOKEN')]) {
+                                    sh """
+                                    docker run --rm \
+                                        -e SONAR_HOST_URL=\${SONAR_HOST_URL} \
+                                        -e SONAR_TOKEN=\${SONAR_TOKEN} \
+                                        -v \${WORKSPACE}:/usr/src \
+                                        sonarsource/sonar-scanner-cli:latest
+                                    """
+                                }
+                            }
                         }
+                    } catch (Exception e) {
+                        echo "SonarQube analysis failed or timed out: ${e.getMessage()}"
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
-            } catch (Exception e) {
-                echo "SonarQube analysis failed or timed out: ${e.getMessage()}"
-                currentBuild.result = 'UNSTABLE'
             }
         }
-    }
-}
 
         stage('Docker Build & Push') {
             steps {
                 script {
                     // Ensure we have the latest code and Dockerfile
                     checkout scm
-                    
+
                     try {
                         // Build the Docker image with build number tag
                         def img = docker.build("${DOCKER_IMAGE_NAME}:${DOCKER_TAG}")
-                        
+
                         // Also tag as latest
                         sh "docker tag ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} ${DOCKER_IMAGE_NAME}:latest"
-                        
+
                         // Push to Docker Hub
                         docker.withRegistry('https://index.docker.io/v1/', 'addition1905') {
                             img.push("${DOCKER_TAG}")
                             img.push("latest")
                         }
-                        
+
                         echo "✅ Docker image built and pushed successfully!"
                         echo "📦 Image: ${DOCKER_IMAGE_NAME}:${DOCKER_TAG}"
                         echo "📦 Image: ${DOCKER_IMAGE_NAME}:latest"
-                        
+
                     } catch (Exception e) {
                         echo "❌ Docker build/push failed: ${e.getMessage()}"
                         error "Docker build and push stage failed"
@@ -202,11 +202,11 @@ pipeline {
                 if (fileExists('coverage/')) {
                     archiveArtifacts artifacts: 'coverage/**/*', allowEmptyArchive: true
                 }
-                
+
                 // Clean up processes
                 sh 'pkill -f jest || true'
                 sh 'pkill -f node || true'
-                
+
                 // Clean up Docker images to save space (optional)
                 sh """
                     docker rmi ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} || true
