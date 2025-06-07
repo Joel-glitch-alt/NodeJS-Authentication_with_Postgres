@@ -42,12 +42,13 @@ pipeline {
         nodejs 'NodeJS'
     }
 
-    environment {
-        SONAR_SCANNER_OPTS = "-Xmx512m"
-        NODE_ENV = 'test'
-        DOCKER_IMAGE_NAME = 'addition1905/nodejs-authentication-postgresql'
-        DOCKER_TAG = "${BUILD_NUMBER}"
-    }
+       environment {
+    SONAR_SCANNER_OPTS = "-Xmx1024m"
+    NODE_ENV = 'test'
+    DOCKER_IMAGE_NAME = 'addition1905/nodejs-authentication-postgresql'
+    DOCKER_TAG = "${BUILD_NUMBER}"
+    SONAR_TIMEOUT = '10' // minutes
+   }
 
     stages {
         stage('Checkout Code') {
@@ -119,30 +120,30 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    try {
-                        withSonarQubeEnv('Sonar-server') {
-                            withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_TOKEN')]) {
-                                sh """
-                                docker run --rm \\
-                                    -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
-                                    -e SONAR_TOKEN=\${SONAR_TOKEN} \\
-                                    -v \${WORKSPACE}:/usr/src \\
-                                    sonarsource/sonar-scanner-cli:latest
-                                """
-                            }
+      stage('SonarQube Analysis') {
+    steps {
+        script {
+            try {
+                timeout(time: 10, unit: 'MINUTES') {
+                    withSonarQubeEnv('Sonar-server') {
+                        withCredentials([string(credentialsId: 'mysonar-second-token', variable: 'SONAR_TOKEN')]) {
+                            sh """
+                            docker run --rm \\
+                                -e SONAR_HOST_URL=\${SONAR_HOST_URL} \\
+                                -e SONAR_TOKEN=\${SONAR_TOKEN} \\
+                                -v \${WORKSPACE}:/usr/src \\
+                                sonarsource/sonar-scanner-cli:latest
+                            """
                         }
-                        echo "SonarQube analysis completed successfully!"
-                    } catch (Exception e) {
-                        echo "SonarQube analysis failed: ${e.getMessage()}"
-                        echo "Continuing pipeline execution..."
-                        currentBuild.result = 'UNSTABLE'
                     }
                 }
+            } catch (Exception e) {
+                echo "SonarQube analysis failed or timed out: ${e.getMessage()}"
+                currentBuild.result = 'UNSTABLE'
             }
         }
+    }
+}
 
         stage('Docker Build & Push') {
             steps {
